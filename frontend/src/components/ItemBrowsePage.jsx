@@ -187,7 +187,9 @@ const ItemBrowsePage = ({ title, description, defaultItemType, emptyTitle, empty
         items.length > 0 ? (
           <>
             <div className="items-grid">
-              {items.map((item) => <ItemCard key={item.id} item={item} />)}
+              {items.map((item) => (
+                <ItemCard key={item.id} item={item} onView={() => navigate(`/items/${item.id}`)} />
+              ))}
             </div>
             <Pagination currentPage={pagination.currentPage} totalPages={pagination.totalPages} onPageChange={(page) => updateSearchParams((params) => params.set('page', String(page)))} />
           </>

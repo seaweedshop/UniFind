@@ -9,10 +9,11 @@ const formatDate = (value) => {
 const UserListingCard = ({ item, onEdit, onDelete, onMarkStatus }) => {
   const imageUrl = getItemImageUrl(item.image_url || item.image);
   const canMarkComplete = item.status_label === 'Active';
-  const markLabel = item.item_type === 'sell' ? 'Mark Sold' : 'Mark Resolved';
+  const markLabel = 'Mark Item as Resolved';
+  const cardClassName = `user-listing-card ${item.status_label === 'Accepted Claim In Progress' ? 'user-listing-card-under-review' : ''} ${item.status_label === 'Resolved' ? 'user-listing-card-resolved' : ''}`.trim();
 
   return (
-    <article className="user-listing-card">
+    <article className={cardClassName}>
       <div className="user-listing-image">
         {imageUrl ? <img src={imageUrl} alt={item.title} /> : <div className="item-image-placeholder">No image</div>}
       </div>

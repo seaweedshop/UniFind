@@ -11,6 +11,12 @@ import LostItems from './pages/LostItems';
 import FoundItems from './pages/FoundItems';
 import Marketplace from './pages/Marketplace';
 import Account from './pages/Account';
+import ItemDetail from './pages/ItemDetail';
+import IncomingClaimsPage from './pages/IncomingClaimsPage';
+import MyClaimsPage from './pages/MyClaimsPage';
+import ClaimDetail from './pages/ClaimDetail';
+import Notifications from './pages/Notifications';
+import Messages from './pages/Messages';
 
 const LandingRedirect = () => {
   const { isAuthenticated, loading } = useAuth();
@@ -39,8 +45,14 @@ const App = () => {
           <Route path="/lost-items" element={<LostItems />} />
           <Route path="/found-items" element={<FoundItems />} />
           <Route path="/marketplace" element={<Marketplace />} />
+          <Route path="/items/:id" element={<ItemDetail />} />
           <Route path="/post-item" element={<PostItem />} />
           <Route path="/account" element={<Account />} />
+          <Route path="/notifications" element={<Notifications />} />
+          <Route path="/messages" element={<Messages />} />
+          <Route path="/claims/incoming" element={<IncomingClaimsPage />} />
+          <Route path="/claims/me" element={<MyClaimsPage />} />
+          <Route path="/claims/:id" element={<ClaimDetail />} />
           <Route path="/create-item" element={<CreateItem />} />
         </Route>
       </Route>

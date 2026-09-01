@@ -8,14 +8,17 @@ const formatDate = (value) => {
 const ItemCard = ({
   item,
   canManage = false,
+  onView,
   onEdit,
   onDelete,
   onResolve,
 }) => {
   const imageUrl = getItemImageUrl(item.image_url || item.image);
+  const itemStatus = item.item_status || item.status_label || 'Active';
+  const cardClassName = `item-card ${itemStatus === 'Under Claim Review' ? 'item-card-under-review' : ''} ${itemStatus === 'Resolved' ? 'item-card-resolved' : ''}`.trim();
 
   return (
-    <article className="item-card">
+    <article className={cardClassName}>
       <div className="item-card-image">
         {imageUrl ? <img src={imageUrl} alt={item.title} /> : <div className="item-image-placeholder">No image</div>}
       </div>
@@ -62,7 +65,13 @@ const ItemCard = ({
             <button className="btn btn-secondary" onClick={() => onEdit(item)}>Edit</button>
             <button className="btn btn-secondary" onClick={() => onDelete(item.id)}>Delete</button>
             <button className="btn" onClick={() => onResolve(item.id)}>
-              {item.item_type === 'sell' ? 'Mark Sold' : 'Mark Resolved'}
+              Mark Item as Resolved
+            </button>
+          </div>
+        ) : onView ? (
+          <div className="item-card-actions">
+            <button className="btn btn-secondary" onClick={() => onView(item)}>
+              View Details
             </button>
           </div>
         ) : null}

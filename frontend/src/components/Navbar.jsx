@@ -1,9 +1,45 @@
 import { NavLink, useNavigate } from 'react-router-dom';
+import { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
+import NotificationBell from './NotificationBell/NotificationBell';
+import NotificationBadge from './NotificationBadge/NotificationBadge';
+import { fetchUnreadConversationSummary } from '../services/conversationService';
 
 const Navbar = () => {
   const { isAuthenticated, user, logout } = useAuth();
   const navigate = useNavigate();
+  const [unreadConversations, setUnreadConversations] = useState(0);
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      setUnreadConversations(0);
+      return undefined;
+    }
+
+    let mounted = true;
+
+    const loadUnreadSummary = async () => {
+      try {
+        const response = await fetchUnreadConversationSummary();
+
+        if (mounted) {
+          setUnreadConversations(response?.summary?.unreadConversations || 0);
+        }
+      } catch {
+        if (mounted) {
+          setUnreadConversations(0);
+        }
+      }
+    };
+
+    loadUnreadSummary();
+    const interval = setInterval(loadUnreadSummary, 20000);
+
+    return () => {
+      mounted = false;
+      clearInterval(interval);
+    };
+  }, [isAuthenticated]);
 
   const handleLogout = () => {
     logout();
@@ -31,6 +67,17 @@ const Navbar = () => {
             </div>
 
             <div className="topbar-right">
+              <NotificationBell />
+
+              <button
+                className="icon-btn message-nav-btn"
+                title="Messages"
+                onClick={() => navigate('/messages')}
+              >
+                <span className="message-nav-icon" aria-hidden="true">💬</span>
+                <NotificationBadge count={unreadConversations} />
+              </button>
+
               <button
                 className="icon-btn"
                 title={user?.full_name || 'Profile'}

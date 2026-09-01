@@ -1,13 +1,25 @@
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
+const http = require('http');
+const { Server } = require('socket.io');
 // Load environment variables from .env into process.env
 require('dotenv').config();
 
 const testRoutes = require('./routes/testRoutes');
 const authRoutes = require('./routes/authRoutes');
 const itemRoutes = require('./routes/itemRoutes');
+const claimRoutes = require('./routes/claimRoutes');
+const notificationRoutes = require('./routes/notificationRoutes');
+const conversationRoutes = require('./routes/conversationRoutes');
+const messageRoutes = require('./routes/messageRoutes');
 const { testDbConnection } = require('./config/db');
+const { ensureWorkflowSchema, runClaimExpirySweep } = require('./controllers/claimController');
+const { ensureItemStatusSchema } = require('./controllers/itemController');
+const { ensureNotificationsSchema } = require('./services/notificationService');
+const { ensureMessagingSchema } = require('./services/messageService');
+const socketAuth = require('./middleware/socketAuth');
+const { registerMessageSocketHandlers } = require('./socket/messageSocket');
 
 
 const app = express();
@@ -37,15 +49,58 @@ app.use(
 app.use('/api', testRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/items', itemRoutes);
+app.use('/api/claims', claimRoutes);
+app.use('/api/notifications', notificationRoutes);
+app.use('/api/conversations', conversationRoutes);
+app.use('/api/messages', messageRoutes);
 
 const startServer = async () => {
   try {
     await testDbConnection();
+    await ensureItemStatusSchema();
+    await ensureWorkflowSchema();
+    await ensureNotificationsSchema();
+    await ensureMessagingSchema();
     console.log('MySQL connection established successfully.');
 
-    app.listen(PORT, () => {
+    const server = http.createServer(app);
+    const io = new Server(server, {
+      cors: {
+        origin: (origin, callback) => {
+          const allowedOrigin = process.env.FRONTEND_URL || 'http://localhost:5173';
+
+          if (!origin || origin === allowedOrigin || isLocalOrigin(origin)) {
+            return callback(null, true);
+          }
+
+          return callback(new Error('CORS policy does not allow this origin.'));
+        },
+        credentials: true,
+      },
+    });
+
+    io.use(socketAuth);
+    registerMessageSocketHandlers(io);
+    app.set('io', io);
+
+    server.listen(PORT, () => {
       console.log(`Server running on http://localhost:${PORT}`);
     });
+
+    server.on('error', (error) => {
+      if (error.code === 'EADDRINUSE') {
+        console.error(`Port ${PORT} is already in use. The backend may already be running in another terminal.`);
+        process.exit(1);
+      }
+
+      throw error;
+    });
+
+    await runClaimExpirySweep();
+    const expirySweep = setInterval(() => {
+      runClaimExpirySweep();
+    }, 60 * 60 * 1000);
+    expirySweep.unref();
   } catch (error) {
     console.error('Failed to start server:', error.message);
     process.exit(1);

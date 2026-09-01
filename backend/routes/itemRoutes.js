@@ -35,6 +35,7 @@ const itemValidation = [
     .isFloat({ min: 0 })
     .withMessage('Price must be a valid non-negative number.'),
   body('condition_status').optional().trim(),
+  body('item_status').optional().isIn(['Active', 'Under Claim Review', 'Resolved']).withMessage('Item status must be Active, Under Claim Review, or Resolved.'),
 ];
 
 const updateValidation = [
@@ -59,6 +60,7 @@ const updateValidation = [
     .withMessage('Price must be a valid non-negative number.'),
   body('condition_status').optional().trim(),
   body('resolved').optional().isBoolean().withMessage('Resolved must be true or false.'),
+  body('item_status').optional().isIn(['Active', 'Under Claim Review', 'Resolved']).withMessage('Item status must be Active, Under Claim Review, or Resolved.'),
 ];
 
 router.get('/', getAllItems);

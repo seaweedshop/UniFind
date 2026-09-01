@@ -5,6 +5,7 @@ const {
   createUser,
   findUserByEmail,
 } = require('../models/userModel');
+const { createNotification } = require('../services/notificationService');
 
 const getAllowedEmailDomain = () => {
   return (process.env.COLLEGE_EMAIL_DOMAIN || 'college.edu').toLowerCase();
@@ -83,6 +84,16 @@ const registerUser = async (req, res) => {
     year: year.trim(),
     created_at: new Date().toISOString(),
   };
+
+  // Registration notifications are fire-and-forget so account creation stays fast.
+  void createNotification(
+    user.id,
+    'Welcome to Lost & Found',
+    'Your account registration was successful.',
+    'system'
+  ).catch((error) => {
+    console.error('Failed to create registration notification:', error.message);
+  });
 
   return sendAuthSuccess(res, user, 201);
 };

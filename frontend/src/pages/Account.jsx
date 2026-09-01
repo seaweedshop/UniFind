@@ -3,6 +3,7 @@ import ConfirmDialog from '../components/ConfirmDialog';
 import EditItemModal from '../components/EditItemModal';
 import EmptyState from '../components/EmptyState';
 import Loader from '../components/Loader';
+import IncomingClaims from '../components/IncomingClaims/IncomingClaims';
 import UserListingCard from '../components/UserListingCard';
 import { useAuth } from '../context/AuthContext';
 import { deleteItem, fetchUserListings, updateItem, updateItemStatus } from '../services/itemService';
@@ -20,11 +21,17 @@ const formatDate = (value) => {
 
 const sortUnresolvedFirst = (items = []) =>
   [...items].sort((a, b) => {
-    if (a.resolved === b.resolved) {
+    const statusRank = (item) => {
+      if (item.item_status === 'Resolved' || item.resolved) return 2;
+      if (item.item_status === 'Under Claim Review') return 1;
+      return 0;
+    };
+
+    if (statusRank(a) === statusRank(b)) {
       return new Date(b.created_at) - new Date(a.created_at);
     }
 
-    return a.resolved ? 1 : -1;
+    return statusRank(a) - statusRank(b);
   });
 
 const Account = () => {
@@ -181,6 +188,8 @@ const Account = () => {
           </button>
         </div>
       </div>
+
+      <IncomingClaims compact />
 
       <div className="listing-tabs">
         {tabs.map((tab) => (

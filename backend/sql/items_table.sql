@@ -9,6 +9,7 @@ CREATE TABLE IF NOT EXISTS items (
   date DATE NOT NULL,
   price DECIMAL(10,2) DEFAULT NULL,
   condition_status VARCHAR(100) DEFAULT NULL,
+  item_status ENUM('Active', 'Under Claim Review', 'Resolved') NOT NULL DEFAULT 'Active',
   resolved BOOLEAN DEFAULT FALSE,
   user_id INT NOT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

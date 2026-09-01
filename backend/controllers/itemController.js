@@ -3,10 +3,58 @@ const path = require('path');
 const { validationResult } = require('express-validator');
 const { dbPool } = require('../config/db');
 const ITEM_CATEGORIES = require('../constants/itemCategories');
+const {
+  ITEM_STATUSES,
+  getItemStatusRank,
+  normalizeItemStatus,
+  getClaimSummaryForItem,
+  resolveItemForOwner,
+} = require('./claimController');
 
 const ALLOWED_SORTS = new Set(['newest', 'oldest', 'price_low', 'price_high']);
 const DEFAULT_LIMIT = 12;
 const MAX_LIMIT = 24;
+
+const ensureItemStatusSchema = async () => {
+  const [rows] = await dbPool.execute(
+    `
+      SELECT COUNT(*) AS count
+      FROM INFORMATION_SCHEMA.COLUMNS
+      WHERE TABLE_SCHEMA = ?
+        AND TABLE_NAME = 'items'
+        AND COLUMN_NAME = 'item_status'
+    `,
+    [process.env.DB_NAME]
+  );
+
+  if (!Number(rows[0]?.count || 0)) {
+    await dbPool.execute(
+      `
+        ALTER TABLE items
+        ADD COLUMN item_status ENUM('Active', 'Under Claim Review', 'Resolved') NOT NULL DEFAULT 'Active' AFTER item_type
+      `
+    );
+  }
+
+  await dbPool.execute(
+    `
+      UPDATE items
+      SET item_status = CASE
+        WHEN item_status = 'Under Claim Review' THEN 'Under Claim Review'
+        WHEN resolved = TRUE OR item_status = 'Resolved' THEN 'Resolved'
+        ELSE 'Active'
+      END
+    `
+  );
+};
+
+const getItemStatusLabel = (itemStatus) => {
+  if (itemStatus === ITEM_STATUSES.UNDER_REVIEW) {
+    return 'Accepted Claim In Progress';
+  }
+
+  return itemStatus || ITEM_STATUSES.ACTIVE;
+};
 
 const getUploadedPath = (file) => (file ? `/uploads/${file.filename}` : null);
 
@@ -88,18 +136,19 @@ const buildFilters = (query) => {
   }
 
   const whereClause = clauses.length > 0 ? `WHERE ${clauses.join(' AND ')}` : '';
-  let orderClause = 'ORDER BY created_at DESC, id DESC';
+  const statusOrder = "CASE WHEN item_status = 'Resolved' THEN 2 WHEN item_status = 'Under Claim Review' THEN 1 ELSE 0 END";
+  let orderClause = `ORDER BY ${statusOrder} ASC, created_at DESC, id DESC`;
 
   if (sort === 'oldest') {
-    orderClause = 'ORDER BY created_at ASC, id ASC';
+    orderClause = `ORDER BY ${statusOrder} ASC, created_at ASC, id ASC`;
   }
 
   if (sort === 'price_low') {
-    orderClause = 'ORDER BY CASE WHEN price IS NULL THEN 1 ELSE 0 END, price ASC, created_at DESC, id DESC';
+    orderClause = `ORDER BY ${statusOrder} ASC, CASE WHEN price IS NULL THEN 1 ELSE 0 END, price ASC, created_at DESC, id DESC`;
   }
 
   if (sort === 'price_high') {
-    orderClause = 'ORDER BY CASE WHEN price IS NULL THEN 1 ELSE 0 END, price DESC, created_at DESC, id DESC';
+    orderClause = `ORDER BY ${statusOrder} ASC, CASE WHEN price IS NULL THEN 1 ELSE 0 END, price DESC, created_at DESC, id DESC`;
   }
 
   return {
@@ -115,14 +164,20 @@ const normalizeItem = (row) => ({
   ...row,
   price: row.price !== null ? Number(row.price) : null,
   image_url: row.image || null,
-  status_label:
-    row.item_type === 'sell'
-      ? row.resolved
-        ? 'Sold'
-        : 'Active'
-      : row.resolved
-        ? 'Resolved'
-        : 'Active',
+  item_status:
+    row.item_status === ITEM_STATUSES.UNDER_REVIEW
+      ? ITEM_STATUSES.UNDER_REVIEW
+      : Boolean(row.resolved) || row.item_status === ITEM_STATUSES.RESOLVED
+        ? ITEM_STATUSES.RESOLVED
+        : ITEM_STATUSES.ACTIVE,
+  resolved: Boolean(row.resolved) || row.item_status === ITEM_STATUSES.RESOLVED,
+  status_label: getItemStatusLabel(
+    row.item_status === ITEM_STATUSES.UNDER_REVIEW
+      ? ITEM_STATUSES.UNDER_REVIEW
+      : Boolean(row.resolved) || row.item_status === ITEM_STATUSES.RESOLVED
+        ? ITEM_STATUSES.RESOLVED
+        : ITEM_STATUSES.ACTIVE
+  ),
 });
 
 const fetchItemById = async (id) => {
@@ -168,9 +223,9 @@ const createItem = async (req, res) => {
   const [result] = await dbPool.execute(
     `
       INSERT INTO items
-        (title, description, category, item_type, image, location, date, price, condition_status, resolved, user_id)
+        (title, description, category, item_type, image, location, date, price, condition_status, item_status, resolved, user_id)
       VALUES
-        (?, ?, ?, ?, ?, ?, ?, ?, ?, FALSE, ?)
+        (?, ?, ?, ?, ?, ?, ?, ?, ?, 'Active', FALSE, ?)
     `,
     [
       title.trim(),
@@ -225,9 +280,9 @@ const getAllItems = async (req, res) => {
       FROM items
       ${whereClause}
       ${orderClause}
-      LIMIT ? OFFSET ?
+      LIMIT ${limit} OFFSET ${offset}
     `,
-    [...values, limit, offset]
+    values
   );
 
   return res.status(200).json({
@@ -247,15 +302,23 @@ const getSingleItem = async (req, res) => {
     return res.status(404).json({ message: 'Item not found.' });
   }
 
+  const claimSummary = await getClaimSummaryForItem(item.id);
+
   return res.status(200).json({
     message: 'Item fetched successfully.',
     item: normalizeItem(item),
+    claim_summary: claimSummary,
   });
 };
 
 const getUserListings = async (req, res) => {
   const [rows] = await dbPool.execute(
-    'SELECT * FROM items WHERE user_id = ? ORDER BY created_at DESC',
+    `
+      SELECT *
+      FROM items
+      WHERE user_id = ?
+      ORDER BY CASE WHEN item_status = 'Resolved' THEN 2 WHEN item_status = 'Under Claim Review' THEN 1 ELSE 0 END ASC, created_at DESC
+    `,
     [req.user.id]
   );
 
@@ -302,6 +365,12 @@ const updateItem = async (req, res) => {
     ? req.body.resolved === true || req.body.resolved === 'true' || req.body.resolved === '1'
     : existingItem.resolved;
 
+  const nextStatus = req.body.item_status
+    ? normalizeItemStatus(req.body.item_status, resolvedValue)
+    : resolvedValue
+      ? ITEM_STATUSES.RESOLVED
+      : normalizeItemStatus(existingItem.item_status, existingItem.resolved);
+
   const priceValue = itemType === 'sell'
     ? (req.body.price !== undefined && req.body.price !== '' ? Number(req.body.price) : existingItem.price)
     : null;
@@ -313,7 +382,7 @@ const updateItem = async (req, res) => {
   await dbPool.execute(
     `
       UPDATE items
-      SET title = ?, description = ?, category = ?, item_type = ?, image = ?, location = ?, date = ?, price = ?, condition_status = ?, resolved = ?
+      SET title = ?, description = ?, category = ?, item_type = ?, image = ?, location = ?, date = ?, price = ?, condition_status = ?, item_status = ?, resolved = ?
       WHERE id = ?
     `,
     [
@@ -326,6 +395,7 @@ const updateItem = async (req, res) => {
       req.body.date || existingItem.date,
       priceValue,
       conditionValue,
+      nextStatus,
       resolvedValue,
       existingItem.id,
     ]
@@ -340,28 +410,7 @@ const updateItem = async (req, res) => {
 };
 
 const updateItemStatus = async (req, res) => {
-  const item = await fetchItemById(req.params.id);
-
-  try {
-    assertOwnership(item, req.user.id);
-  } catch (error) {
-    return res.status(error.statusCode || 500).json({ message: error.message });
-  }
-
-  const resolved = req.body.resolved === true || req.body.resolved === 'true' || req.body.resolved === '1';
-
-  await dbPool.execute('UPDATE items SET resolved = ? WHERE id = ?', [resolved, item.id]);
-
-  const updatedItem = await fetchItemById(item.id);
-
-  return res.status(200).json({
-    message: resolved
-      ? item.item_type === 'sell'
-        ? 'Listing marked as sold.'
-        : 'Listing marked as resolved.'
-      : 'Listing marked as active.',
-    item: normalizeItem(updatedItem),
-  });
+  return resolveItemForOwner(req, res);
 };
 
 const deleteItem = async (req, res) => {
@@ -381,7 +430,15 @@ const deleteItem = async (req, res) => {
 };
 
 const getMyItems = async (req, res) => {
-  const [rows] = await dbPool.execute('SELECT * FROM items WHERE user_id = ? ORDER BY created_at DESC', [req.user.id]);
+  const [rows] = await dbPool.execute(
+    `
+      SELECT *
+      FROM items
+      WHERE user_id = ?
+      ORDER BY CASE WHEN item_status = 'Resolved' THEN 2 WHEN item_status = 'Under Claim Review' THEN 1 ELSE 0 END ASC, created_at DESC
+    `,
+    [req.user.id]
+  );
 
   return res.status(200).json({
     message: 'Your items fetched successfully.',
@@ -398,4 +455,5 @@ module.exports = {
   deleteItem,
   getMyItems,
   getUserListings,
+  ensureItemStatusSchema,
 };
