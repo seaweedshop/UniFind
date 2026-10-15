@@ -13,9 +13,17 @@ const dbPool = mysql.createPool({
 
 // Test DB connectivity during server startup.
 const testDbConnection = async () => {
+  console.log('DB host:', process.env.DB_HOST);
+  console.log('DB port:', process.env.DB_PORT);
+  console.log('DB name:', process.env.DB_NAME);
+
   const connection = await dbPool.getConnection();
-  await connection.ping();
-  connection.release();
+  try {
+    await connection.ping();
+    console.log('MySQL ping successful');
+  } finally {
+    connection.release();
+  }
 };
 
 module.exports = {
