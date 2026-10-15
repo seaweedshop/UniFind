@@ -83,9 +83,9 @@ const startServer = async () => {
     registerMessageSocketHandlers(io);
     app.set('io', io);
 
-    server.listen(PORT, () => {
-      console.log(`Server running on http://localhost:${PORT}`);
-    });
+   server.listen(PORT, '0.0.0.0', () => {
+  console.log(`Server listening on port ${PORT}`);
+});
 
     server.on('error', (error) => {
       if (error.code === 'EADDRINUSE') {
