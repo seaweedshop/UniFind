@@ -1,4 +1,5 @@
 const { body, param, query, validationResult } = require('express-validator');
+
 const {
   ensureMessagingSchema,
   createOrGetConversation,
@@ -9,189 +10,284 @@ const {
   getUnreadSummaryForUser,
 } = require('../services/messageService');
 
+
+
+const conversationsListValidation = [
+  query('page')
+    .optional()
+    .isInt({ min: 1 })
+    .withMessage('Page must be a positive integer.'),
+
+  query('limit')
+    .optional()
+    .isInt({ min: 1, max: 50 })
+    .withMessage('Limit must be between 1 and 50.'),
+];
+
 const conversationCreateValidation = [
-  body('item_id').isInt({ min: 1 }).withMessage('Item id must be a valid number.'),
-  body('recipient_id').isInt({ min: 1 }).withMessage('Recipient id must be a valid number.'),
+  body('item_id')
+    .isInt({ min: 1 })
+    .withMessage('Item id must be a valid number.'),
+
+  body('recipient_id')
+    .isInt({ min: 1 })
+    .withMessage('Recipient id must be a valid number.'),
 ];
 
 const conversationIdValidation = [
-  param('id').isInt({ min: 1 }).withMessage('Conversation id must be a valid number.'),
+  param('id')
+    .isInt({ min: 1 })
+    .withMessage('Conversation id must be a valid number.'),
 ];
 
 const conversationMessagesValidation = [
-  param('id').isInt({ min: 1 }).withMessage('Conversation id must be a valid number.'),
-  query('page').optional().isInt({ min: 1 }).withMessage('Page must be a positive integer.'),
-  query('limit').optional().isInt({ min: 1, max: 100 }).withMessage('Limit must be between 1 and 100.'),
+  param('id')
+    .isInt({ min: 1 })
+    .withMessage('Conversation id must be a valid number.'),
+
+  query('page')
+    .optional()
+    .isInt({ min: 1 })
+    .withMessage('Page must be a positive integer.'),
+
+  query('limit')
+    .optional()
+    .isInt({ min: 1, max: 100 })
+    .withMessage('Limit must be between 1 and 100.'),
 ];
 
-const conversationsListValidation = [
-  query('page').optional().isInt({ min: 1 }).withMessage('Page must be a positive integer.'),
-  query('limit').optional().isInt({ min: 1, max: 50 }).withMessage('Limit must be between 1 and 50.'),
-];
 
-const getConversations = async (req, res) => {
+
+const handleValidationErrors = (req, res) => {
   const errors = validationResult(req);
 
   if (!errors.isEmpty()) {
     return res.status(400).json({
-      message: 'Please provide valid pagination values.',
+      message: errors.array()[0].msg,
       errors: errors.array(),
     });
+  }
+
+  return null;
+};
+
+
+const getConversations = async (req, res) => {
+  const validationResponse = handleValidationErrors(req, res);
+
+  if (validationResponse) {
+    return validationResponse;
   }
 
   try {
     await ensureMessagingSchema();
 
-    const page = req.query.page ? Number.parseInt(req.query.page, 10) : 1;
-    const limit = req.query.limit ? Number.parseInt(req.query.limit, 10) : 20;
-    const payload = await getConversationsForUser(req.user.id, { page, limit });
+    const page = Number.parseInt(req.query.page || '1', 10);
+    const limit = Number.parseInt(req.query.limit || '20', 10);
 
-    return res.status(200).json({
-      message: 'Conversations fetched successfully.',
-      ...payload,
+    const result = await getConversationsForUser(req.user.id, {
+      page,
+      limit,
     });
+
+    return res.status(200).json(result);
   } catch (error) {
-    return res.status(500).json({ message: 'Unable to load conversations right now.' });
+    console.error('GET /api/conversations error:', error);
+
+    return res.status(error.statusCode || 500).json({
+      message:
+        error.message || 'Unable to load conversations right now.',
+    });
   }
 };
 
 const createConversation = async (req, res) => {
-  const errors = validationResult(req);
+  const validationResponse = handleValidationErrors(req, res);
 
-  if (!errors.isEmpty()) {
-    return res.status(400).json({
-      message: 'Please provide valid conversation details.',
-      errors: errors.array(),
-    });
+  if (validationResponse) {
+    return validationResponse;
   }
 
   try {
     await ensureMessagingSchema();
 
+    const { item_id, recipient_id } = req.body;
+
     const result = await createOrGetConversation({
-      itemId: req.body.item_id,
+      itemId: item_id,
       initiatorId: req.user.id,
-      recipientId: req.body.recipient_id,
+      recipientId: recipient_id,
     });
 
-    return res.status(result.created ? 201 : 200).json({
-      message: result.created ? 'Conversation created successfully.' : 'Conversation already exists.',
-      created: result.created,
-      conversation: result.conversation,
-    });
+    return res.status(result.created ? 201 : 200).json(result);
   } catch (error) {
-    const statusCode = error.statusCode || 500;
+    console.error('POST /api/conversations error:', error);
 
-    return res.status(statusCode).json({
-      message: error.message || 'Could not create the conversation.',
+    return res.status(error.statusCode || 500).json({
+      message:
+        error.message || 'Unable to create conversation right now.',
     });
   }
 };
 
-const getConversationById = async (req, res) => {
-  const errors = validationResult(req);
 
-  if (!errors.isEmpty()) {
-    return res.status(400).json({
-      message: 'Please provide a valid conversation id.',
-      errors: errors.array(),
-    });
+
+const getConversationById = async (req, res) => {
+  const validationResponse = handleValidationErrors(req, res);
+
+  if (validationResponse) {
+    return validationResponse;
   }
 
   try {
     await ensureMessagingSchema();
 
     const conversationId = Number.parseInt(req.params.id, 10);
-    const conversation = await getConversationByIdForUser(conversationId, req.user.id);
+
+    const conversation = await getConversationByIdForUser(
+      conversationId,
+      req.user.id
+    );
 
     if (!conversation) {
-      return res.status(403).json({ message: 'This conversation is unavailable.' });
+      return res.status(404).json({
+        message: 'Conversation not found.',
+      });
     }
 
     return res.status(200).json({
-      message: 'Conversation fetched successfully.',
       conversation,
     });
   } catch (error) {
-    return res.status(500).json({ message: 'Could not load this conversation right now.' });
+    console.error(
+      `GET /api/conversations/${req.params.id} error:`,
+      error
+    );
+
+    return res.status(error.statusCode || 500).json({
+      message:
+        error.message || 'Unable to load conversation right now.',
+    });
   }
 };
+
+/*
+|--------------------------------------------------------------------------
+| GET /api/conversations/:id/messages
+|--------------------------------------------------------------------------
+| Get messages belonging to a conversation.
+| Only conversation participants are allowed to access them.
+*/
 
 const getConversationMessages = async (req, res) => {
-  const errors = validationResult(req);
+  const validationResponse = handleValidationErrors(req, res);
 
-  if (!errors.isEmpty()) {
-    return res.status(400).json({
-      message: 'Please provide a valid conversation id and pagination values.',
-      errors: errors.array(),
-    });
+  if (validationResponse) {
+    return validationResponse;
   }
 
   try {
     await ensureMessagingSchema();
 
     const conversationId = Number.parseInt(req.params.id, 10);
-    const page = req.query.page ? Number.parseInt(req.query.page, 10) : 1;
-    const limit = req.query.limit ? Number.parseInt(req.query.limit, 10) : 30;
 
-    const payload = await getConversationMessagesForUser(conversationId, req.user.id, { page, limit });
+    const page = Number.parseInt(req.query.page || '1', 10);
+    const limit = Number.parseInt(req.query.limit || '30', 10);
 
-    return res.status(200).json({
-      message: 'Messages fetched successfully.',
-      ...payload,
-    });
+    const result = await getConversationMessagesForUser(
+      conversationId,
+      req.user.id,
+      {
+        page,
+        limit,
+      }
+    );
+
+    return res.status(200).json(result);
   } catch (error) {
-    const statusCode = error.statusCode || 500;
-    return res.status(statusCode).json({ message: error.message || 'Could not load messages right now.' });
+    console.error(
+      `GET /api/conversations/${req.params.id}/messages error:`,
+      error
+    );
+
+    return res.status(error.statusCode || 500).json({
+      message:
+        error.message || 'Unable to load messages right now.',
+    });
   }
 };
+
+/*
+|--------------------------------------------------------------------------
+| PUT /api/conversations/:id/read
+|--------------------------------------------------------------------------
+| Mark messages in a conversation as read for the authenticated user.
+*/
 
 const markConversationRead = async (req, res) => {
-  const errors = validationResult(req);
+  const validationResponse = handleValidationErrors(req, res);
 
-  if (!errors.isEmpty()) {
-    return res.status(400).json({
-      message: 'Please provide a valid conversation id.',
-      errors: errors.array(),
-    });
+  if (validationResponse) {
+    return validationResponse;
   }
 
   try {
     await ensureMessagingSchema();
 
     const conversationId = Number.parseInt(req.params.id, 10);
-    const updatedCount = await markConversationReadForUser(conversationId, req.user.id);
+
+    const affectedRows = await markConversationReadForUser(
+      conversationId,
+      req.user.id
+    );
 
     return res.status(200).json({
-      message: 'Conversation marked as read.',
-      updatedCount,
+      success: true,
+      affectedRows,
     });
   } catch (error) {
-    const statusCode = error.statusCode || 500;
-    return res.status(statusCode).json({ message: error.message || 'Could not update read status.' });
+    console.error(
+      `PUT /api/conversations/${req.params.id}/read error:`,
+      error
+    );
+
+    return res.status(error.statusCode || 500).json({
+      message:
+        error.message || 'Unable to mark conversation as read.',
+    });
   }
 };
+
+
 
 const getUnreadSummary = async (req, res) => {
   try {
     await ensureMessagingSchema();
 
-    const summary = await getUnreadSummaryForUser(req.user.id);
+    const result = await getUnreadSummaryForUser(req.user.id);
 
-    return res.status(200).json({
-      message: 'Unread summary fetched successfully.',
-      summary,
-    });
+    return res.status(200).json(result);
   } catch (error) {
-    return res.status(500).json({ message: 'Could not load unread summary right now.' });
+    console.error(
+      'GET /api/conversations/unread/summary error:',
+      error
+    );
+
+    return res.status(error.statusCode || 500).json({
+      message:
+        error.message || 'Unable to load unread conversation summary.',
+    });
   }
 };
 
+
+
 module.exports = {
+  conversationsListValidation,
   conversationCreateValidation,
   conversationIdValidation,
   conversationMessagesValidation,
-  conversationsListValidation,
+
   getConversations,
   createConversation,
   getConversationById,

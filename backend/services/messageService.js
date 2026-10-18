@@ -408,9 +408,9 @@ const getConversationsForUser = async (userId, { page = 1, limit = 20 } = {}) =>
       ) unread_messages ON unread_messages.conversation_id = c.id
       WHERE cp.user_id = ?
       ORDER BY c.updated_at DESC, c.id DESC
-      LIMIT ? OFFSET ?
+      LIMIT ${safeLimit} OFFSET ${offset}
     `,
-    [safeUserId, safeUserId, safeUserId, safeLimit, offset]
+    [safeUserId, safeUserId, safeUserId]
   );
 
   const totalConversations = Number(countRows[0]?.total_conversations || 0);
@@ -516,11 +516,11 @@ const getConversationMessagesForUser = async (
         FROM messages
         WHERE conversation_id = ?
         ORDER BY created_at DESC, id DESC
-        LIMIT ? OFFSET ?
+        LIMIT ${safeLimit} OFFSET ${offset}
       ) paged
       ORDER BY created_at ASC, id ASC
     `,
-    [safeConversationId, safeLimit, offset]
+    [safeConversationId]
   );
 
   const totalMessages = Number(countRows[0]?.total_messages || 0);
