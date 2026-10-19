@@ -49,10 +49,12 @@ const ConversationPreview = ({
 
         <p className="conversation-preview-item">{conversation?.item?.title || 'Unknown Item'}</p>
 
-        {!compact ? <p className="conversation-preview-message">{previewMessage}</p> : null}
+        <p className="conversation-preview-message">{previewMessage}</p>
       </div>
 
-      <UnreadBadge count={conversation?.unread_count || 0} />
+      {compact ? (
+        conversation?.unread_count > 0 ? <span className="conversation-unread-dot" aria-label="Unread messages" /> : null
+      ) : <UnreadBadge count={conversation?.unread_count || 0} />}
     </button>
   );
 };

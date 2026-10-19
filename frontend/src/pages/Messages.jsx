@@ -62,6 +62,8 @@ const Messages = () => {
   const [messageTotalPages, setMessageTotalPages] = useState(0);
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [mobileView, setMobileView] = useState('list');
+  const [listRetryKey, setListRetryKey] = useState(0);
+  const [messageRetryKey, setMessageRetryKey] = useState(0);
   const socketRef = useRef(null);
 
   const selectedConversationId = useMemo(() => {
@@ -113,7 +115,7 @@ const Messages = () => {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [listRetryKey]);
 
   useEffect(() => {
     if (!selectedConversationId) {
@@ -204,7 +206,7 @@ const Messages = () => {
     return () => {
       cancelled = true;
     };
-  }, [selectedConversationId]);
+  }, [messageRetryKey, selectedConversationId]);
 
   useEffect(() => {
     const socket = getMessagingSocket();
@@ -381,13 +383,22 @@ const Messages = () => {
 
       <div className={`messages-layout ${showMobileChat ? 'messages-layout-show-chat' : ''}`.trim()}>
         <aside className="messages-conversations-panel">
-          <ConversationList
-            conversations={conversations}
-            selectedConversationId={selectedConversationId}
-            onSelectConversation={selectConversation}
-            loading={listLoading}
-            emptyDescription="No conversations yet. Start from an item page using Message Seller, Contact Finder, or Contact Owner."
-          />
+          {listError ? (
+            <div className="form-alert form-alert-with-action">
+              <span>{listError}</span>
+              <button type="button" className="btn btn-secondary btn-small" onClick={() => setListRetryKey((value) => value + 1)}>
+                Retry
+              </button>
+            </div>
+          ) : (
+            <ConversationList
+              conversations={conversations}
+              selectedConversationId={selectedConversationId}
+              onSelectConversation={selectConversation}
+              loading={listLoading}
+              emptyDescription="No conversations yet. Start from an item page using Message Seller, Contact Finder, or Contact Owner."
+            />
+          )}
 
           {conversationsTotalPages > conversationsPage ? (
             <div className="messages-load-more-conversations">
@@ -411,6 +422,7 @@ const Messages = () => {
             setMobileView('list');
             navigate('/messages');
           }}
+          onRetry={() => setMessageRetryKey((value) => value + 1)}
           onSend={sendMessage}
           onLoadMore={loadOlderMessages}
         />

@@ -4,9 +4,9 @@ const ConfirmDialog = ({ open, title, message, confirmLabel = 'Confirm', cancelL
   }
 
   return (
-    <div className="dialog-overlay">
-      <div className="dialog-card page-card">
-        <h3>{title}</h3>
+    <div className="dialog-overlay" role="presentation">
+      <div className="dialog-card page-card" role="dialog" aria-modal="true" aria-labelledby="confirm-dialog-title">
+        <h3 id="confirm-dialog-title">{title}</h3>
         <p className="muted">{message}</p>
 
         <div className="dialog-actions">

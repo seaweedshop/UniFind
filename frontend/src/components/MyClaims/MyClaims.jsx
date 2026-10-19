@@ -38,7 +38,14 @@ const MyClaims = ({ compact = false }) => {
       </div>
 
       {statusMessage ? <div className={acceptedCount > 0 ? 'success-alert' : 'form-alert'}>{statusMessage}</div> : null}
-      {error ? <div className="form-alert">{error}</div> : null}
+      {error ? (
+        <div className="form-alert form-alert-with-action">
+          <span>{error}</span>
+          <button type="button" className="btn btn-secondary btn-small" onClick={loadClaims}>
+            Retry
+          </button>
+        </div>
+      ) : null}
       {loading ? <Loader label="Loading your claims..." /> : null}
 
       {!loading && !error ? (

@@ -14,7 +14,7 @@ const ConversationList = ({
   }
 
   if (!conversations.length) {
-    return <EmptyConversations description={emptyDescription} />;
+    return <EmptyConversations description={emptyDescription} compact={compact} />;
   }
 
   return (

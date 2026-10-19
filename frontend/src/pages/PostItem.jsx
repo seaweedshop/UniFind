@@ -12,6 +12,7 @@ const PostItem = () => {
   const { loading: authLoading, isAuthenticated } = useAuth();
   const [existingItem, setExistingItem] = useState(null);
   const [loading, setLoading] = useState(Boolean(editId));
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
@@ -37,6 +38,9 @@ const PostItem = () => {
   }
 
   const handleSubmit = async ({ imageFile, ...fields }) => {
+    if (saving) return;
+
+    setSaving(true);
     setError('');
     setSuccess('');
 
@@ -63,6 +67,8 @@ const PostItem = () => {
       navigate('/account');
     } catch (err) {
       setError(err?.response?.data?.message || 'Could not save the item. Please try again.');
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -81,6 +87,7 @@ const PostItem = () => {
         <ItemForm
           initialValues={existingItem}
           onSubmit={handleSubmit}
+          loading={saving}
           submitLabel={editId ? 'Update Item' : 'Post Item'}
         />
       ) : null}

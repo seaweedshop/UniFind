@@ -12,6 +12,7 @@ const ChatWindow = ({
   hasMore = false,
   loadingMore = false,
   onBack,
+  onRetry,
   onSend,
   onLoadMore,
 }) => {
@@ -27,7 +28,12 @@ const ChatWindow = ({
     <div className="chat-window">
       <ChatHeader conversation={conversation} onBack={onBack} />
 
-      {error ? <div className="form-alert">{error}</div> : null}
+      {error ? (
+        <div className="form-alert form-alert-with-action">
+          <span>{error}</span>
+          {onRetry ? <button type="button" className="btn btn-secondary btn-small" onClick={onRetry}>Retry</button> : null}
+        </div>
+      ) : null}
 
       <div className="chat-messages" role="log" aria-live="polite">
         {hasMore ? (

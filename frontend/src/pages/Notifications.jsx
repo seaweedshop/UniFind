@@ -105,7 +105,14 @@ const Notifications = () => {
 
       {loading ? <Loader label="Loading notifications..." /> : null}
       {message ? <div className="success-alert">{message}</div> : null}
-      {error ? <div className="form-alert">{error}</div> : null}
+      {error ? (
+        <div className="form-alert form-alert-with-action">
+          <span>{error}</span>
+          <button type="button" className="btn btn-secondary btn-small" onClick={() => loadNotifications()}>
+            Retry
+          </button>
+        </div>
+      ) : null}
 
       {!loading && !error ? (
         notifications.length > 0 ? (

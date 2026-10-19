@@ -2,32 +2,13 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import NotificationBadge from '../NotificationBadge/NotificationBadge';
 import NotificationDropdown from '../NotificationDropdown/NotificationDropdown';
-import {
-  fetchNotifications,
-  markNotificationRead,
-} from '../../services/notificationService';
+import { useNotifications } from '../../context/NotificationContext';
 
 const NotificationBell = () => {
   const navigate = useNavigate();
+  const { notifications, unreadCount, loadNotifications, markNotificationRead } = useNotifications();
   const rootRef = useRef(null);
   const [open, setOpen] = useState(false);
-  const [notifications, setNotifications] = useState([]);
-  const [unreadCount, setUnreadCount] = useState(0);
-
-  const loadNotifications = async () => {
-    try {
-      const response = await fetchNotifications({ limit: 5 });
-      setNotifications(response.notifications || []);
-      setUnreadCount(response.unreadCount || 0);
-    } catch {
-      setNotifications([]);
-      setUnreadCount(0);
-    }
-  };
-
-  useEffect(() => {
-    loadNotifications();
-  }, []);
 
   useEffect(() => {
     const handleOutsideClick = (event) => {
@@ -43,14 +24,13 @@ const NotificationBell = () => {
   const handleToggle = () => {
     setOpen((value) => !value);
     if (!open) {
-      loadNotifications();
+      loadNotifications({ showNewToasts: false });
     }
   };
 
   const handleMarkRead = async (notification) => {
     try {
-      await markNotificationRead(notification.id);
-      await loadNotifications();
+      await markNotificationRead(notification);
     } catch {
       // Keep the bell resilient; the next refresh will resync state.
     }

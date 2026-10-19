@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { ITEM_CATEGORIES } from '../constants/itemCategories';
+import { getItemImageUrl } from '../services/itemService';
 
 const emptyState = {
   title: '',
@@ -16,6 +17,7 @@ const emptyState = {
 const ItemForm = ({ initialValues, onSubmit, loading = false, submitLabel = 'Save Item' }) => {
   const [formData, setFormData] = useState(emptyState);
   const [imageFile, setImageFile] = useState(null);
+  const [imagePreview, setImagePreview] = useState('');
   const categoryOptions = [
     ...ITEM_CATEGORIES,
     ...(initialValues?.category && !ITEM_CATEGORIES.includes(initialValues.category) ? [initialValues.category] : []),
@@ -34,8 +36,23 @@ const ItemForm = ({ initialValues, onSubmit, loading = false, submitLabel = 'Sav
         condition_status: initialValues.condition_status || '',
         resolved: Boolean(initialValues.resolved),
       });
+      setImagePreview(getItemImageUrl(initialValues.image_url || initialValues.image));
+    } else {
+      setFormData(emptyState);
+      setImagePreview('');
     }
   }, [initialValues]);
+
+  useEffect(() => {
+    if (!imageFile) {
+      return undefined;
+    }
+
+    const previewUrl = URL.createObjectURL(imageFile);
+    setImagePreview(previewUrl);
+
+    return () => URL.revokeObjectURL(previewUrl);
+  }, [imageFile]);
 
   const handleChange = (event) => {
     const { name, value } = event.target;
@@ -52,8 +69,8 @@ const ItemForm = ({ initialValues, onSubmit, loading = false, submitLabel = 'Sav
   return (
     <form className="item-form" onSubmit={handleSubmit}>
       <label className="form-group">
-        <span>Item Type</span>
-        <select name="item_type" value={formData.item_type} onChange={handleChange}>
+        <span>Item Type <small>(required)</small></span>
+        <select name="item_type" value={formData.item_type} onChange={handleChange} required aria-required="true">
           <option value="lost">Lost</option>
           <option value="found">Found</option>
           <option value="sell">Sell / Marketplace</option>
@@ -61,18 +78,18 @@ const ItemForm = ({ initialValues, onSubmit, loading = false, submitLabel = 'Sav
       </label>
 
       <label className="form-group">
-        <span>Title</span>
-        <input name="title" value={formData.title} onChange={handleChange} required />
+        <span>Title <small>(required)</small></span>
+        <input name="title" value={formData.title} onChange={handleChange} required aria-required="true" />
       </label>
 
       <label className="form-group">
-        <span>Description</span>
-        <textarea name="description" value={formData.description} onChange={handleChange} rows="4" required />
+        <span>Description <small>(required)</small></span>
+        <textarea name="description" value={formData.description} onChange={handleChange} rows="4" required aria-required="true" />
       </label>
 
       <label className="form-group">
-        <span>Category</span>
-        <select name="category" value={formData.category} onChange={handleChange} required>
+        <span>Category <small>(required)</small></span>
+        <select name="category" value={formData.category} onChange={handleChange} required aria-required="true">
           <option value="">Select category</option>
           {categoryOptions.map((option) => (
             <option key={option} value={option}>
@@ -84,17 +101,27 @@ const ItemForm = ({ initialValues, onSubmit, loading = false, submitLabel = 'Sav
 
       <label className="form-group">
         <span>Image</span>
-        <input type="file" accept="image/*" onChange={(event) => setImageFile(event.target.files?.[0] || null)} />
+        <input
+          type="file"
+          accept="image/*"
+          onChange={(event) => setImageFile(event.target.files?.[0] || null)}
+        />
+        {imagePreview ? (
+          <div className="item-form-image-preview">
+            <img src={imagePreview} alt="Selected listing preview" />
+            {imageFile ? <span>New image selected</span> : <span>Current image</span>}
+          </div>
+        ) : null}
       </label>
 
       <label className="form-group">
-        <span>Location</span>
-        <input name="location" value={formData.location} onChange={handleChange} required />
+        <span>Location <small>(required)</small></span>
+        <input name="location" value={formData.location} onChange={handleChange} required aria-required="true" />
       </label>
 
       <label className="form-group">
-        <span>Date</span>
-        <input type="date" name="date" value={formData.date} onChange={handleChange} required />
+        <span>Date <small>(required)</small></span>
+        <input type="date" name="date" value={formData.date} onChange={handleChange} required aria-required="true" />
       </label>
 
       {isMarketplace ? (

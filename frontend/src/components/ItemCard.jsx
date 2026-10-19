@@ -1,4 +1,5 @@
 import { getItemImageUrl } from '../services/itemService';
+import StatusBadge from './StatusBadge';
 
 const formatDate = (value) => {
   if (!value) return 'N/A';
@@ -20,17 +21,17 @@ const ItemCard = ({
   return (
     <article className={cardClassName}>
       <div className="item-card-image">
-        {imageUrl ? <img src={imageUrl} alt={item.title} /> : <div className="item-image-placeholder">No image</div>}
+        {imageUrl ? <img src={imageUrl} alt={item.title} loading="lazy" /> : <div className="item-image-placeholder">No image</div>}
       </div>
 
       <div className="item-card-body">
         <div className="item-card-topline">
           <span className="badge">{item.item_type}</span>
           <span className="badge badge-muted">{item.category}</span>
-          {item.status_label && item.status_label !== 'Active' ? <span className="badge badge-muted">{item.status_label}</span> : null}
+          <StatusBadge status={item.item_status || item.status_label} itemType={item.item_type} />
         </div>
 
-        <h3>{item.title}</h3>
+        <h3 title={item.title}>{item.title}</h3>
         <p className="muted item-description">{item.description}</p>
 
         <dl className="item-meta">
@@ -62,15 +63,15 @@ const ItemCard = ({
 
         {canManage ? (
           <div className="item-card-actions">
-            <button className="btn btn-secondary" onClick={() => onEdit(item)}>Edit</button>
-            <button className="btn btn-secondary" onClick={() => onDelete(item.id)}>Delete</button>
-            <button className="btn" onClick={() => onResolve(item.id)}>
+            <button type="button" className="btn btn-secondary" onClick={() => onEdit(item)}>Edit</button>
+            <button type="button" className="btn btn-secondary" onClick={() => onDelete(item.id)}>Delete</button>
+            <button type="button" className="btn" onClick={() => onResolve(item.id)}>
               Mark Item as Resolved
             </button>
           </div>
         ) : onView ? (
           <div className="item-card-actions">
-            <button className="btn btn-secondary" onClick={() => onView(item)}>
+            <button type="button" className="btn btn-secondary" onClick={() => onView(item)}>
               View Details
             </button>
           </div>

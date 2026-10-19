@@ -20,7 +20,7 @@ const UserListingCard = ({ item, onEdit, onDelete, onMarkStatus }) => {
 
       <div className="user-listing-body">
         <div className="listing-topline">
-          <StatusBadge status={item.status_label} />
+          <StatusBadge status={item.item_status || item.status_label} itemType={item.item_type} />
           <span className="listing-meta-type">{item.item_type}</span>
           <span className="listing-meta-type listing-meta-category">{item.category}</span>
         </div>
