@@ -1,15 +1,18 @@
 import api, { API_ORIGIN } from './api';
 
 export const getItemImageUrl = (imagePath) => {
-  if (!imagePath) {
+  const value = String(imagePath || '').trim();
+
+  if (!value) {
     return '';
   }
 
-  if (imagePath.startsWith('http')) {
-    return imagePath;
+  if (/^(https?:)?\/\//i.test(value) || value.startsWith('blob:') || value.startsWith('data:')) {
+    return value.startsWith('//') ? `https:${value}` : value;
   }
 
-  return `${API_ORIGIN}${imagePath}`;
+  const legacyPath = value.startsWith('/') ? value : `/${value}`;
+  return `${API_ORIGIN}${legacyPath}`;
 };
 
 export const fetchItems = async (params = {}) => {

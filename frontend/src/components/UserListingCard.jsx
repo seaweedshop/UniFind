@@ -1,4 +1,5 @@
 import { getItemImageUrl } from '../services/itemService';
+import ImageWithFallback from './ImageWithFallback';
 import StatusBadge from './StatusBadge';
 
 const formatDate = (value) => {
@@ -15,7 +16,7 @@ const UserListingCard = ({ item, onEdit, onDelete, onMarkStatus }) => {
   return (
     <article className={cardClassName}>
       <div className="user-listing-image">
-        {imageUrl ? <img src={imageUrl} alt={item.title} /> : <div className="item-image-placeholder">No image</div>}
+        <ImageWithFallback src={imageUrl} alt={item.title} />
       </div>
 
       <div className="user-listing-body">

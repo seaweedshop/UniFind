@@ -1,4 +1,5 @@
 import { getItemImageUrl } from '../services/itemService';
+import ImageWithFallback from './ImageWithFallback';
 import StatusBadge from './StatusBadge';
 
 const formatDate = (value) => {
@@ -21,7 +22,7 @@ const ItemCard = ({
   return (
     <article className={cardClassName}>
       <div className="item-card-image">
-        {imageUrl ? <img src={imageUrl} alt={item.title} loading="lazy" /> : <div className="item-image-placeholder">No image</div>}
+        <ImageWithFallback src={imageUrl} alt={item.title} />
       </div>
 
       <div className="item-card-body">

@@ -2,6 +2,10 @@ const fs = require('fs');
 const path = require('path');
 const { validationResult } = require('express-validator');
 const { dbPool } = require('../config/db');
+const {
+  uploadImageBuffer,
+  deleteCloudinaryImage,
+} = require('../config/cloudinary');
 const ITEM_CATEGORIES = require('../constants/itemCategories');
 const {
   ITEM_STATUSES,
@@ -56,22 +60,55 @@ const getItemStatusLabel = (itemStatus) => {
   return itemStatus || ITEM_STATUSES.ACTIVE;
 };
 
-const getUploadedPath = (file) => (file ? `/uploads/${file.filename}` : null);
+const isLegacyImagePath = (storedPath) => typeof storedPath === 'string' && storedPath.startsWith('/uploads/');
 
 const getFileSystemPath = (storedPath) => {
-  if (!storedPath) {
+  if (!isLegacyImagePath(storedPath)) {
     return null;
   }
 
-  return path.join(__dirname, '..', storedPath.replace(/^\//, ''));
+  const uploadRoot = path.resolve(__dirname, '..', 'uploads');
+  const imagePath = path.resolve(uploadRoot, storedPath.slice('/uploads/'.length));
+
+  return imagePath.startsWith(`${uploadRoot}${path.sep}`) ? imagePath : null;
 };
 
-const deleteImageFile = (storedPath) => {
+const deleteLegacyImageFile = (storedPath) => {
   const imagePath = getFileSystemPath(storedPath);
 
   if (imagePath && fs.existsSync(imagePath)) {
     fs.unlinkSync(imagePath);
   }
+};
+
+const cleanupStoredImage = async (image, imagePublicId) => {
+  if (imagePublicId) {
+    try {
+      await deleteCloudinaryImage(imagePublicId);
+    } catch (error) {
+      console.error('Cloudinary image cleanup failed:', error.message);
+    }
+    return;
+  }
+
+  try {
+    deleteLegacyImageFile(image);
+  } catch (error) {
+    console.error('Legacy image cleanup failed:', error.message);
+  }
+};
+
+const uploadItemImage = async (file) => {
+  if (!file) {
+    return { image: null, imagePublicId: null };
+  }
+
+  const upload = await uploadImageBuffer(file.buffer, file.originalname);
+
+  return {
+    image: upload.secureUrl,
+    imagePublicId: upload.publicId,
+  };
 };
 
 const buildFilters = (query) => {
@@ -164,6 +201,7 @@ const normalizeItem = (row) => ({
   ...row,
   price: row.price !== null ? Number(row.price) : null,
   image_url: row.image || null,
+  image_public_id: row.image_public_id || null,
   item_status:
     row.item_status === ITEM_STATUSES.UNDER_REVIEW
       ? ITEM_STATUSES.UNDER_REVIEW
@@ -203,8 +241,6 @@ const createItem = async (req, res) => {
   const errors = validationResult(req);
 
   if (!errors.isEmpty()) {
-    deleteImageFile(getUploadedPath(req.file));
-
     return res.status(400).json({
       message: 'Please fix the highlighted item fields.',
       errors: errors.array(),
@@ -212,7 +248,6 @@ const createItem = async (req, res) => {
   }
 
   const { title, description, category, item_type, location, date, price, condition_status } = req.body;
-  const image = getUploadedPath(req.file);
 
   if ((item_type === 'sell' || price || condition_status) && item_type !== 'sell') {
     return res.status(400).json({
@@ -220,33 +255,48 @@ const createItem = async (req, res) => {
     });
   }
 
-  const [result] = await dbPool.execute(
-    `
-      INSERT INTO items
-        (title, description, category, item_type, image, location, date, price, condition_status, item_status, resolved, user_id)
-      VALUES
-        (?, ?, ?, ?, ?, ?, ?, ?, ?, 'Active', FALSE, ?)
-    `,
-    [
-      title.trim(),
-      description.trim(),
-      category.trim(),
-      item_type,
-      image,
-      location.trim(),
-      date,
-      item_type === 'sell' && price ? Number(price) : null,
-      item_type === 'sell' ? (condition_status || null) : null,
-      req.user.id,
-    ]
-  );
+  let uploadedImage = { image: null, imagePublicId: null };
 
-  const [rows] = await dbPool.execute('SELECT * FROM items WHERE id = ?', [result.insertId]);
+  try {
+    uploadedImage = await uploadItemImage(req.file);
 
-  return res.status(201).json({
-    message: 'Item created successfully.',
-    item: normalizeItem(rows[0]),
-  });
+    const [result] = await dbPool.execute(
+      `
+        INSERT INTO items
+          (title, description, category, item_type, image, image_public_id, location, date, price, condition_status, item_status, resolved, user_id)
+        VALUES
+          (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Active', FALSE, ?)
+      `,
+      [
+        title.trim(),
+        description.trim(),
+        category.trim(),
+        item_type,
+        uploadedImage.image,
+        uploadedImage.imagePublicId,
+        location.trim(),
+        date,
+        item_type === 'sell' && price ? Number(price) : null,
+        item_type === 'sell' ? (condition_status || null) : null,
+        req.user.id,
+      ]
+    );
+
+    const [rows] = await dbPool.execute('SELECT * FROM items WHERE id = ?', [result.insertId]);
+
+    return res.status(201).json({
+      message: 'Item created successfully.',
+      item: normalizeItem(rows[0]),
+    });
+  } catch (error) {
+    if (uploadedImage.imagePublicId) {
+      await cleanupStoredImage(null, uploadedImage.imagePublicId);
+    }
+
+    return res.status(error.statusCode || 500).json({
+      message: error.message || 'Could not create the item right now.',
+    });
+  }
 };
 
 const getAllItems = async (req, res) => {
@@ -338,8 +388,6 @@ const updateItem = async (req, res) => {
   const errors = validationResult(req);
 
   if (!errors.isEmpty()) {
-    deleteImageFile(getUploadedPath(req.file));
-
     return res.status(400).json({
       message: 'Please fix the highlighted item fields.',
       errors: errors.array(),
@@ -352,12 +400,6 @@ const updateItem = async (req, res) => {
     assertOwnership(existingItem, req.user.id);
   } catch (error) {
     return res.status(error.statusCode || 500).json({ message: error.message });
-  }
-
-  const image = req.file ? getUploadedPath(req.file) : existingItem.image;
-
-  if (req.file) {
-    deleteImageFile(existingItem.image);
   }
 
   const itemType = req.body.item_type || existingItem.item_type;
@@ -379,34 +421,58 @@ const updateItem = async (req, res) => {
     ? (req.body.condition_status !== undefined ? req.body.condition_status : existingItem.condition_status)
     : null;
 
-  await dbPool.execute(
-    `
-      UPDATE items
-      SET title = ?, description = ?, category = ?, item_type = ?, image = ?, location = ?, date = ?, price = ?, condition_status = ?, item_status = ?, resolved = ?
-      WHERE id = ?
-    `,
-    [
-      req.body.title ? req.body.title.trim() : existingItem.title,
-      req.body.description ? req.body.description.trim() : existingItem.description,
-      req.body.category ? req.body.category.trim() : existingItem.category,
-      itemType,
-      image,
-      req.body.location ? req.body.location.trim() : existingItem.location,
-      req.body.date || existingItem.date,
-      priceValue,
-      conditionValue,
-      nextStatus,
-      resolvedValue,
-      existingItem.id,
-    ]
-  );
+  let uploadedImage = null;
 
-  const updatedRows = await fetchItemById(existingItem.id);
+  try {
+    if (req.file) {
+      uploadedImage = await uploadItemImage(req.file);
+    }
 
-  return res.status(200).json({
-    message: 'Item updated successfully.',
-    item: normalizeItem(updatedRows),
-  });
+    const nextImage = uploadedImage ? uploadedImage.image : existingItem.image;
+    const nextImagePublicId = uploadedImage ? uploadedImage.imagePublicId : (existingItem.image_public_id || null);
+
+    await dbPool.execute(
+      `
+        UPDATE items
+        SET title = ?, description = ?, category = ?, item_type = ?, image = ?, image_public_id = ?, location = ?, date = ?, price = ?, condition_status = ?, item_status = ?, resolved = ?
+        WHERE id = ?
+      `,
+      [
+        req.body.title ? req.body.title.trim() : existingItem.title,
+        req.body.description ? req.body.description.trim() : existingItem.description,
+        req.body.category ? req.body.category.trim() : existingItem.category,
+        itemType,
+        nextImage,
+        nextImagePublicId,
+        req.body.location ? req.body.location.trim() : existingItem.location,
+        req.body.date || existingItem.date,
+        priceValue,
+        conditionValue,
+        nextStatus,
+        resolvedValue,
+        existingItem.id,
+      ]
+    );
+
+    if (uploadedImage) {
+      await cleanupStoredImage(existingItem.image, existingItem.image_public_id);
+    }
+
+    const updatedRows = await fetchItemById(existingItem.id);
+
+    return res.status(200).json({
+      message: 'Item updated successfully.',
+      item: normalizeItem(updatedRows),
+    });
+  } catch (error) {
+    if (uploadedImage?.imagePublicId) {
+      await cleanupStoredImage(null, uploadedImage.imagePublicId);
+    }
+
+    return res.status(error.statusCode || 500).json({
+      message: error.message || 'Could not update the item right now.',
+    });
+  }
 };
 
 const updateItemStatus = async (req, res) => {
@@ -422,9 +488,8 @@ const deleteItem = async (req, res) => {
     return res.status(error.statusCode || 500).json({ message: error.message });
   }
 
-  deleteImageFile(existingItem.image);
-
   await dbPool.execute('DELETE FROM items WHERE id = ?', [existingItem.id]);
+  await cleanupStoredImage(existingItem.image, existingItem.image_public_id);
 
   return res.status(200).json({ message: 'Item deleted successfully.' });
 };

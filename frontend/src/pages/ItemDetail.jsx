@@ -7,6 +7,7 @@ import { useAuth } from '../context/AuthContext';
 import { createOrOpenConversation } from '../services/conversationService';
 import { fetchItem, getItemImageUrl } from '../services/itemService';
 import { submitClaim } from '../services/claimService';
+import ImageWithFallback from '../components/ImageWithFallback';
 
 const formatDate = (value) => {
   if (!value) return 'N/A';
@@ -149,7 +150,7 @@ const ItemDetail = () => {
 
       <div className="item-detail-layout">
         <div className="item-detail-media">
-          {imageUrl ? <img src={imageUrl} alt={item.title} /> : <div className="item-image-placeholder">No image</div>}
+          <ImageWithFallback src={imageUrl} alt={item.title} loading="eager" />
         </div>
 
         <div className="item-detail-content">

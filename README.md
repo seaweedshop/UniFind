@@ -128,6 +128,18 @@ Frontend `frontend/.env`:
 VITE_API_BASE_URL=http://localhost:5001/api
 ```
 
+### Cloudinary image storage
+
+New listing images are uploaded server-side to Cloudinary and stored in MySQL as secure URLs. Configure these variables in the backend environment, including the Render service environment settings:
+
+```env
+CLOUDINARY_CLOUD_NAME=your_cloudinary_cloud_name
+CLOUDINARY_API_KEY=your_cloudinary_api_key
+CLOUDINARY_API_SECRET=your_cloudinary_api_secret
+```
+
+The Cloudinary API secret must remain backend-only and must not use a `VITE_` prefix. Existing `/uploads/...` image paths remain backward-compatible when the legacy file still exists; missing legacy files must be re-uploaded or recovered separately.
+
 ## 4. Development Commands
 
 ### Start backend

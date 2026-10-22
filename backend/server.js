@@ -18,6 +18,7 @@ const { ensureWorkflowSchema, runClaimExpirySweep } = require('./controllers/cla
 const { ensureItemStatusSchema } = require('./controllers/itemController');
 const { ensureNotificationsSchema } = require('./services/notificationService');
 const { ensureMessagingSchema } = require('./services/messageService');
+const { assertCloudinaryConfigured, ensureItemImageSchema } = require('./config/cloudinary');
 const socketAuth = require('./middleware/socketAuth');
 const { registerMessageSocketHandlers } = require('./socket/messageSocket');
 
@@ -61,6 +62,8 @@ const startServer = async () => {
     await ensureWorkflowSchema();
     await ensureNotificationsSchema();
     await ensureMessagingSchema();
+    await ensureItemImageSchema();
+    assertCloudinaryConfigured();
     console.log('MySQL connection established successfully.');
 
     const server = http.createServer(app);

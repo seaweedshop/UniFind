@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { ITEM_CATEGORIES } from '../constants/itemCategories';
 import { getItemImageUrl } from '../services/itemService';
+import ImageWithFallback from './ImageWithFallback';
 
 const emptyState = {
   title: '',
@@ -108,7 +109,7 @@ const ItemForm = ({ initialValues, onSubmit, loading = false, submitLabel = 'Sav
         />
         {imagePreview ? (
           <div className="item-form-image-preview">
-            <img src={imagePreview} alt="Selected listing preview" />
+            <ImageWithFallback src={imagePreview} alt="Selected listing preview" loading="eager" />
             {imageFile ? <span>New image selected</span> : <span>Current image</span>}
           </div>
         ) : null}

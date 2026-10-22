@@ -5,6 +5,7 @@ import Loader from '../components/Loader';
 import { useAuth } from '../context/AuthContext';
 import { acceptClaim, fetchClaimDetail, rejectClaim } from '../services/claimService';
 import { getItemImageUrl } from '../services/itemService';
+import ImageWithFallback from '../components/ImageWithFallback';
 
 const formatDateTime = (value) => {
   if (!value) return 'N/A';
@@ -123,7 +124,7 @@ const ClaimDetail = () => {
 
       <div className="claim-detail-layout">
         <div className="claim-detail-media">
-          {imageUrl ? <img src={imageUrl} alt={claim.item_title} /> : <div className="item-image-placeholder">No image</div>}
+          <ImageWithFallback src={imageUrl} alt={claim.item_title} loading="eager" />
         </div>
 
         <div className="claim-detail-content">

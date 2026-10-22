@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import ClaimStatusBadge from '../ClaimStatusBadge/ClaimStatusBadge';
 import { getItemImageUrl } from '../../services/itemService';
+import ImageWithFallback from '../ImageWithFallback';
 
 const formatDate = (value) => {
   if (!value) return 'N/A';
@@ -26,7 +27,7 @@ const ClaimCard = ({ claim, variant = 'incoming', loading = false, onAccept, onR
     <article className="claim-card">
       {variant === 'my' ? (
         <div className="claim-card-image">
-          {imageUrl ? <img src={imageUrl} alt={claim.item_title} /> : <div className="item-image-placeholder">No image</div>}
+          <ImageWithFallback src={imageUrl} alt={claim.item_title} />
         </div>
       ) : null}
 
